@@ -361,7 +361,9 @@ perguntas_validacao = perguntas_limpas_ordenadas[:indice_base_validacao]
 respostas_validacao = respostas_limpas_ordenadas[:indice_base_validacao]
 
 # Treinamento
-batch_indice_checagem_treinamento = 20
+
+# Testar com 1 e 20
+batch_indice_checagem_treinamento = 1
 batch_indice_checagem_validacao = (len(perguntas_treinamento) // batch_size // 2) - 1
 erro_total_treinamento = 0
 lista_validacao_erro = []
@@ -424,3 +426,46 @@ for epoca in range(1, epocas + 1):
         print('Isso é o melhor que eu posso fazer')
         break
 print('Final')
+
+# --- Parte 4 - Testes com o modelo Seq2Seq ---
+
+# Carregamento dos pesos e executando a seção
+checkpoint = "./chatbot_pesos.ckpt"
+session = tf.InteractiveSession()
+session.run(tf.global_variables_initializer())
+saver = tf.train.Saver()
+saver.restore(session, checkpoint)
+
+# Conversão de questões de string para inteiros
+def converte_string_para_int(pergunta, palavra_para_int):
+    pergunta = limpa_texto(pergunta)
+    return [palavra_para_int.get(palavra, palavra_para_int['<OUT>']) for palavra in pergunta.split()]
+
+converte_string_para_int("i'm a robot", perguntas_palavras_int)
+
+# Conversa
+while(True):
+    pergunta = input('Você: ')
+    if pergunta == 'Tchau':
+        break
+    pergunta = converte_string_para_int(pergunta, perguntas_palavras_int)
+    pergunta = pergunta + [perguntas_palavras_int['<PAD>']] * (25 - len(pergunta))
+    # [64, 25]
+    batch_falso = np.zeros((batch_size, 25))
+    batch_falso[0] = pergunta
+    resposta_prevista = session.run(previsoes_teste, feed_dict = {entradas: batch_falso,
+                                                                   keep_prob: 1})[0]
+    respostas = ''
+    for i in np.argmax(resposta_prevista, 1):
+        if respostas_int_palavras[i] == 'i':
+            token = 'I'
+        elif respostas_int_palavras[i] == '<EOS>':
+            token = '.'
+        elif respostas_int_palavras[i] == '<OUT>':
+            token = 'out'
+        else:
+            token = ' ' + respostas_int_palavras[i]
+        resposta += token
+        if token == '.':
+            break
+    print('Chatbot: ' + resposta)
